@@ -1,4 +1,4 @@
-# src/schemas.py
+# Databricks notebook source
 from pyspark.sql.types import StructType, StructField, IntegerType, DoubleType, TimestampType
 
 solar_wind_schema = StructType([

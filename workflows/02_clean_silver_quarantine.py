@@ -1,4 +1,4 @@
-# workflows/02_clean_silver_quarantine.py
+# Databricks notebook source
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 from src.config import BRONZE_TABLE, SILVER_TABLE, QUARANTINE_TABLE

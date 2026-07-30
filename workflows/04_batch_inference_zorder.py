@@ -1,4 +1,4 @@
-# workflows/04_batch_inference_zorder.py
+# Databricks notebook source
 import mlflow.spark
 from pyspark.sql import SparkSession
 from pyspark.ml.feature import VectorAssembler

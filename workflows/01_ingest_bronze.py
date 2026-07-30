@@ -1,4 +1,4 @@
-# workflows/01_ingest_bronze.py
+# Databricks notebook source
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 from src.config import RAW_DATA_PATH, BRONZE_TABLE, CATALOG, SCHEMA

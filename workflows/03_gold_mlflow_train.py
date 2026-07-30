@@ -1,4 +1,4 @@
-# workflows/03_gold_mlflow_train.py
+# Databricks notebook source
 import mlflow
 import mlflow.spark
 from pyspark.sql import SparkSession
