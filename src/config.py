@@ -1,5 +1,5 @@
 # Raw Data Source
-RAW_DATA_PATH = "/Volumes/main/default/raw_data/historicsw.csv"
+RAW_DATA_PATH = "/Volumes/workspace/default/raw_data/historicsw.csv"
 
 # Delta Storage Paths
 BRONZE_PATH = "/tmp/swdb/bronze_sw"
