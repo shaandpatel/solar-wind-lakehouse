@@ -1,5 +1,5 @@
 # Raw Data Source
-RAW_DATA_PATH = "file:/Workspace/Users/shaandpatel98@gmail.com/historicsw.csv"  # or file:/tmp/historicsw.csv
+RAW_DATA_PATH = "file:///Workspace/Users/shaandpatel98@gmail.com/historicsw.csv" 
 
 # Local Path-Based Delta Storage
 BRONZE_PATH = "file:/tmp/swdb/bronze_sw"
