@@ -11,11 +11,11 @@ print(f"Starting Silver ETL & Data Quality checks on {BRONZE_TABLE}...")
 spark.sql(f"""
 CREATE TABLE IF NOT EXISTS {SILVER_TABLE} (
     time_tag TIMESTAMP,
-    speed DOUBLE,
-    density DOUBLE,
-    b DOUBLE,
-    bz DOUBLE,
-    temp INTEGER,
+    solar_wind_speed DOUBLE,
+    proton_density DOUBLE,
+    magnetic_field_total DOUBLE,
+    magnetic_field_bz DOUBLE,
+    plasma_temperature INTEGER,
     status_code STRING,
     _ingested_at TIMESTAMP
 ) USING DELTA
@@ -24,11 +24,11 @@ CREATE TABLE IF NOT EXISTS {SILVER_TABLE} (
 spark.sql(f"""
 CREATE TABLE IF NOT EXISTS {QUARANTINE_TABLE} (
     time_tag TIMESTAMP,
-    speed DOUBLE,
-    density DOUBLE,
-    b DOUBLE,
-    bz DOUBLE,
-    temp INTEGER,
+    solar_wind_speed DOUBLE,
+    proton_density DOUBLE,
+    magnetic_field_total DOUBLE,
+    magnetic_field_bz DOUBLE,
+    plasma_temperature INTEGER,
     status_code STRING,
     quarantine_reason STRING,
     _quarantined_at TIMESTAMP
@@ -45,12 +45,12 @@ pk_valid = F.col("time_tag").isNotNull()
 
 # Feature validity checks
 features_valid = (
-    F.col("speed").isNotNull() & 
-    F.col("density").isNotNull() & 
-    F.col("b").isNotNull() & 
-    F.col("bz").isNotNull() & 
-    F.col("temp").isNotNull() & 
-    (F.col("speed") >= 0) &
+    F.col("solar_wind_speed").isNotNull() & 
+    F.col("proton_density").isNotNull() & 
+    F.col("magnetic_field_total").isNotNull() & 
+    F.col("magnetic_field_bz").isNotNull() & 
+    F.col("plasma_temperature").isNotNull() & 
+    (F.col("solar_wind_speed") >= 0) &
     (F.col("status_code") == "OK")
 )
 
@@ -64,12 +64,12 @@ valid_df = bronze_df.filter(valid_condition).dropDuplicates(["time_tag"])
 invalid_df = bronze_df.filter(~valid_condition) \
     .withColumn("quarantine_reason", 
         F.when(F.col("time_tag").isNull(), "Missing Primary Key (time_tag)")
-         .when(F.col("speed").isNull(), "Null Solar Wind Speed Measurement")
-         .when(F.col("density").isNull(), "Null Density Measurement")
-         .when(F.col("b").isNull(), "Null Magnetic Field Measurement")
-         .when(F.col("bz").isNull(), "Null Z Magnetic Field Measurement")
-         .when(F.col("temp").isNull(), "Null Temperature Measurement")
-         .when(F.col("speed") < 0, "Negative Wind Speed Value")
+         .when(F.col("solar_wind_speed").isNull(), "Null Solar Wind Speed Measurement")
+         .when(F.col("proton_density").isNull(), "Null Proton Density Measurement")
+         .when(F.col("magnetic_field_total").isNull(), "Null Magnetic Field Measurement")
+         .when(F.col("magnetic_field_bz").isNull(), "Null Z Magnetic Field Measurement")
+         .when(F.col("plasma_temperature").isNull(), "Null Plasma Temperature Measurement")
+         .when(F.col("solar_wind_speed") < 0, "Negative Solar Wind Speed Value")
          .when(F.col("status_code") != "OK", "Non-OK Sensor Flag")
          .otherwise("Failed Validation Check")
     ) \

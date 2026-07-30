@@ -3,9 +3,9 @@ from pyspark.sql.types import StructType, StructField, IntegerType, DoubleType, 
 
 solar_wind_schema = StructType([
     StructField("time_tag", TimestampType(), True),
-    StructField("speed", DoubleType(), True),
-    StructField("density", DoubleType(), True),
-    StructField("b", DoubleType(), True),
-    StructField("bz", DoubleType(), True),
-    StructField("temp", IntegerType(), True)
+    StructField("solar_wind_speed", DoubleType(), True),
+    StructField("proton_density", DoubleType(), True),
+    StructField("magnetic_field_total", DoubleType(), True),
+    StructField("magnetic_field_bz", DoubleType(), True),
+    StructField("plasma_temperature", IntegerType(), True)
 ])
