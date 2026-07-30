@@ -8,8 +8,8 @@ spark = SparkSession.builder.getOrCreate()
 
 print(f"Starting Silver ETL & Data Quality checks on path {BRONZE_PATH}...")
 
-# 1. Read Bronze Data directly from Delta path
-bronze_df = spark.read.format("delta").load(BRONZE_PATH)
+# 1. Reads directly from UC table
+bronze_df = spark.read.table(BRONZE_TABLE)
 
 # 2. Define Comprehensive Validation Rules
 pk_valid = F.col("time_tag").isNotNull()
