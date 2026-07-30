@@ -2,13 +2,16 @@
 import mlflow.spark
 from pyspark.sql import SparkSession
 from pyspark.ml.feature import VectorAssembler
-from src.config import SILVER_TABLE, GOLD_TABLE, MLFLOW_EXPERIMENT_PATH
+from src.config import SILVER_PATH, GOLD_PATH, MLFLOW_EXPERIMENT_PATH
 
 spark = SparkSession.builder.getOrCreate()
-print(f"Starting Batch Inference on {SILVER_TABLE}...")
+print(f"Starting Batch Inference on path {SILVER_PATH}...")
 
-# 1. Feature Engineering (Matching 03 Script)
-features_df = spark.sql(f"""
+# 1. Read Silver Delta path into Temp View
+silver_df = spark.read.format("delta").load(SILVER_PATH)
+silver_df.createOrReplaceTempView("silver_data")
+
+features_df = spark.sql("""
     SELECT
         time_tag,
 
@@ -22,7 +25,7 @@ features_df = spark.sql(f"""
         -- Rolling Means
         COALESCE(AVG(solar_wind_speed) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag ROWS BETWEEN 5 PRECEDING AND CURRENT ROW), solar_wind_speed) AS rolling_5p_wind_speed,
         COALESCE(AVG(magnetic_field_total) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag ROWS BETWEEN 5 PRECEDING AND CURRENT ROW), magnetic_field_total) AS rolling_mag_mean,
-        COALESCE(AVG(proton_density) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag ROWS BETWEEN 5 PRECEDING AND CURRENT ROW), proton_density) AS rolling_density_mean,
+        COALESCE(AVG(proton_density) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag ROWS BETWEEN 5 PRECEDING AND CURRENT ROW), rolling_density_mean) AS rolling_density_mean,
         COALESCE(AVG(plasma_temperature) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag ROWS BETWEEN 5 PRECEDING AND CURRENT ROW), plasma_temperature) AS rolling_temp_mean,
         COALESCE(AVG(magnetic_field_bz) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag ROWS BETWEEN 5 PRECEDING AND CURRENT ROW), magnetic_field_bz) AS rolling_bz_mean,
 
@@ -38,7 +41,7 @@ features_df = spark.sql(f"""
         COALESCE(solar_wind_speed - LAG(solar_wind_speed, 1) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag), 0.0) AS wind_delta,
         COALESCE(magnetic_field_bz - LAG(magnetic_field_bz, 1) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag), 0.0) AS bz_delta
 
-    FROM {SILVER_TABLE}
+    FROM silver_data
 """).dropna()
 
 feature_cols = [
@@ -48,7 +51,6 @@ feature_cols = [
     "wind_lag_1", "bz_lag_1", "wind_delta", "bz_delta"
 ]
 
-# Assemble
 assembler = VectorAssembler(inputCols=feature_cols, outputCol="raw_features")
 assembled_df = assembler.transform(features_df)
 
@@ -67,11 +69,9 @@ model_uri = f"runs:/{latest_run_id}/kmeans_pipeline"
 print(f"Dynamically fetched latest MLflow Run ID: {latest_run_id}")
 print(f"Loading Pipeline from: {model_uri}")
 
-# The loaded model contains both the scaler and the kmeans model
 loaded_pipeline = mlflow.spark.load_model(model_uri)
 scored_df = loaded_pipeline.transform(assembled_df)
 
-# Select final columns to save
 final_gold_df = scored_df.select(
     "time_tag",
     "solar_wind_speed", "proton_density", "magnetic_field_total", "magnetic_field_bz", "plasma_temperature",
@@ -81,23 +81,21 @@ final_gold_df = scored_df.select(
     "anomaly_cluster"
 )
 
-# 3. Save, Optimize, and Time Travel
-final_gold_df.write.format("delta").mode("overwrite").saveAsTable(GOLD_TABLE)
-print(f"Batch inference saved to {GOLD_TABLE}")
+# 3. Save, Optimize, and Time Travel using Path Syntax
+final_gold_df.write.format("delta").mode("overwrite").save(GOLD_PATH)
+print(f"Batch inference saved to path: {GOLD_PATH}")
 
 print("Optimizing Gold Table for fast querying...")
-spark.sql(f"OPTIMIZE {GOLD_TABLE} ZORDER BY (time_tag)")
+spark.sql(f"OPTIMIZE delta.`{GOLD_PATH}` ZORDER BY (time_tag)")
 
 print("Running Delta Time Travel Audit...")
-history_df = spark.sql(f"DESCRIBE HISTORY {GOLD_TABLE}")
+history_df = spark.sql(f"DESCRIBE HISTORY delta.`{GOLD_PATH}`")
 
 latest_version = history_df.select("version").head()[0]
 if latest_version > 0:
     previous_version = latest_version - 1
-    history_old = spark.read.option("versionAsOf", previous_version).table(GOLD_TABLE)
+    history_old = spark.read.option("versionAsOf", previous_version).format("delta").load(GOLD_PATH)
     print(f"Current Version ({latest_version}) Rows: {final_gold_df.count()}")
     print(f"Previous Version ({previous_version}) Rows: {history_old.count()}")
 else:
     print("This is Version 0. No previous history to travel back to yet.")
-
-    

@@ -6,14 +6,17 @@ from pyspark.ml import Pipeline
 from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.ml.clustering import KMeans
 from pyspark.ml.evaluation import ClusteringEvaluator
-from src.config import SILVER_TABLE, GOLD_TRAINING_EVAL_TABLE, MLFLOW_EXPERIMENT_PATH
+from src.config import SILVER_PATH, GOLD_TRAINING_EVAL_PATH, MLFLOW_EXPERIMENT_PATH
 
-# 1. Initialize Spark
 spark = SparkSession.builder.appName("Solar_Wind_Lakehouse").getOrCreate()
-print(f"Starting Gold Layer ML Workflow using input table: {SILVER_TABLE}...")
+print(f"Starting Gold Layer ML Workflow using input path: {SILVER_PATH}...")
+
+# 1. Read Silver Delta path and create Temp View for Spark SQL
+silver_df = spark.read.format("delta").load(SILVER_PATH)
+silver_df.createOrReplaceTempView("silver_data")
 
 # 2. Feature Engineering via Spark SQL
-gold_features_df = spark.sql(f"""
+gold_features_df = spark.sql("""
     SELECT
         time_tag,
 
@@ -43,10 +46,10 @@ gold_features_df = spark.sql(f"""
         COALESCE(solar_wind_speed - LAG(solar_wind_speed, 1) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag), 0.0) AS wind_delta,
         COALESCE(magnetic_field_bz - LAG(magnetic_field_bz, 1) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag), 0.0) AS bz_delta
 
-    FROM {SILVER_TABLE}
+    FROM silver_data
 """).dropna()
 
-# Features for VectorAssembler
+# 3. Features for VectorAssembler
 feature_cols = [
     "solar_wind_speed", "proton_density", "magnetic_field_total", "magnetic_field_bz", "plasma_temperature",
     "rolling_5p_wind_speed", "rolling_mag_mean", "rolling_density_mean", "rolling_temp_mean", "rolling_bz_mean",
@@ -54,7 +57,6 @@ feature_cols = [
     "wind_lag_1", "bz_lag_1", "wind_delta", "bz_delta"
 ]
 
-# Assemble columns into a single vector
 assembler = VectorAssembler(inputCols=feature_cols, outputCol="raw_features")
 assembled_df = assembler.transform(gold_features_df)
 
@@ -65,32 +67,26 @@ with mlflow.start_run(run_name="kmeans_solar_anomaly") as run:
     k_clusters = 3
     seed = 25
     
-    # Log Hyperparameters
     mlflow.log_param("k_clusters", k_clusters)
     mlflow.log_param("seed", seed)
     mlflow.log_param("feature_columns", feature_cols)
     
-    # Define ML Pipeline stages
     scaler = StandardScaler(inputCol="raw_features", outputCol="features", withStd=True, withMean=True)
     kmeans = KMeans(k=k_clusters, seed=seed, featuresCol="features", predictionCol="anomaly_cluster")
     
     pipeline = Pipeline(stages=[scaler, kmeans])
-    
-    # Train Distributed Pipeline (Scales data and fits K-Means)
     pipeline_model = pipeline.fit(assembled_df)
     predictions_df = pipeline_model.transform(assembled_df)
     
-    # Evaluate Clustering Performance
     evaluator = ClusteringEvaluator(predictionCol="anomaly_cluster", featuresCol="features", metricName="silhouette")
     silhouette = evaluator.evaluate(predictions_df)
     
-    # Log Metrics & The Entire Pipeline
     mlflow.log_metric("silhouette_score", silhouette)
     mlflow.spark.log_model(pipeline_model, "kmeans_pipeline")
     
     print(f"Model Silhouette Score: {silhouette:.4f} logged to MLflow.")
 
-# 5. Save Training Evaluation Table
+# 5. Save Training Evaluation Data to Delta Path
 final_eval_df = predictions_df.select(
     "time_tag", "solar_wind_speed", "proton_density", "magnetic_field_total", "magnetic_field_bz", "plasma_temperature",
     "rolling_5p_wind_speed", "rolling_mag_mean", "rolling_density_mean", "rolling_temp_mean", "rolling_bz_mean",
@@ -98,6 +94,5 @@ final_eval_df = predictions_df.select(
     "anomaly_cluster"
 )
 
-final_eval_df.write.format("delta").mode("overwrite").saveAsTable(GOLD_TRAINING_EVAL_TABLE)
-print(f"Successfully generated anomaly tags and saved to evaluation table: {GOLD_TRAINING_EVAL_TABLE}")
-
+final_eval_df.write.format("delta").mode("overwrite").save(GOLD_TRAINING_EVAL_PATH)
+print(f"Successfully generated anomaly tags and saved to evaluation path: {GOLD_TRAINING_EVAL_PATH}")

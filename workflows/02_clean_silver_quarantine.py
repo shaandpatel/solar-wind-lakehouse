@@ -1,49 +1,19 @@
 # Databricks notebook source
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
-from src.config import BRONZE_TABLE, SILVER_TABLE, QUARANTINE_TABLE
+from delta.tables import DeltaTable
+from src.config import BRONZE_PATH, SILVER_PATH, QUARANTINE_PATH
 
 spark = SparkSession.builder.getOrCreate()
 
-print(f"Starting Silver ETL & Data Quality checks on {BRONZE_TABLE}...")
+print(f"Starting Silver ETL & Data Quality checks on path {BRONZE_PATH}...")
 
-# 1. Initialize Delta Tables via Spark SQL if they don't exist
-spark.sql(f"""
-CREATE TABLE IF NOT EXISTS {SILVER_TABLE} (
-    time_tag TIMESTAMP,
-    solar_wind_speed DOUBLE,
-    proton_density DOUBLE,
-    magnetic_field_total DOUBLE,
-    magnetic_field_bz DOUBLE,
-    plasma_temperature INTEGER,
-    status_code STRING,
-    _ingested_at TIMESTAMP
-) USING DELTA
-""")
+# 1. Read Bronze Data directly from Delta path
+bronze_df = spark.read.format("delta").load(BRONZE_PATH)
 
-spark.sql(f"""
-CREATE TABLE IF NOT EXISTS {QUARANTINE_TABLE} (
-    time_tag TIMESTAMP,
-    solar_wind_speed DOUBLE,
-    proton_density DOUBLE,
-    magnetic_field_total DOUBLE,
-    magnetic_field_bz DOUBLE,
-    plasma_temperature INTEGER,
-    status_code STRING,
-    quarantine_reason STRING,
-    _quarantined_at TIMESTAMP
-) USING DELTA
-""")
-
-# 2. Read Bronze Data
-bronze_df = spark.table(BRONZE_TABLE)
-
-# 3. Define Comprehensive Validation Rules
-
-# Primary key checks
+# 2. Define Comprehensive Validation Rules
 pk_valid = F.col("time_tag").isNotNull()
 
-# Feature validity checks
 features_valid = (
     F.col("solar_wind_speed").isNotNull() & 
     F.col("proton_density").isNotNull() & 
@@ -54,13 +24,11 @@ features_valid = (
     (F.col("status_code") == "OK")
 )
 
-# Combined master rule
 valid_condition = pk_valid & features_valid
 
 # Filter clean vs invalid data
 valid_df = bronze_df.filter(valid_condition).dropDuplicates(["time_tag"])
 
-# Tag invalid records with specific audit reasons
 invalid_df = bronze_df.filter(~valid_condition) \
     .withColumn("quarantine_reason", 
         F.when(F.col("time_tag").isNull(), "Missing Primary Key (time_tag)")
@@ -75,27 +43,23 @@ invalid_df = bronze_df.filter(~valid_condition) \
     ) \
     .withColumn("_quarantined_at", F.current_timestamp())
 
-# 4. Route Invalid Records to Quarantine Table
+# 3. Route Invalid Records to Quarantine Path
 quarantine_count = invalid_df.count()
 if quarantine_count > 0:
-    invalid_df.write.format("delta").mode("append").saveAsTable(QUARANTINE_TABLE)
-    print(f"Quarantined {quarantine_count} bad record(s) -> {QUARANTINE_TABLE}")
+    invalid_df.write.format("delta").mode("append").save(QUARANTINE_PATH)
+    print(f"Quarantined {quarantine_count} bad record(s) -> {QUARANTINE_PATH}")
 else:
     print("Zero data quality failures detected.")
 
-# 5. Upsert (MERGE) Valid Data into Silver Table using Spark SQL
-valid_df.createOrReplaceTempView("staged_updates")
-
-spark.sql(f"""
-    MERGE INTO {SILVER_TABLE} AS target
-    USING staged_updates AS source
-    ON target.time_tag = source.time_tag
-    WHEN MATCHED THEN
-        UPDATE SET *
-    WHEN NOT MATCHED THEN
-        INSERT *
-""")
+# 4. Upsert (MERGE) Valid Data into Silver Path
+if not DeltaTable.isDeltaTable(spark, SILVER_PATH):
+    valid_df.write.format("delta").mode("overwrite").save(SILVER_PATH)
+else:
+    silver_table = DeltaTable.forPath(spark, SILVER_PATH)
+    silver_table.alias("target").merge(
+        valid_df.alias("source"),
+        "target.time_tag = source.time_tag"
+    ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
 
 silver_count = valid_df.count()
-print(f"Successfully merged {silver_count} clean record(s) -> {SILVER_TABLE}")
-
+print(f"Successfully merged {silver_count} clean record(s) -> {SILVER_PATH}")
