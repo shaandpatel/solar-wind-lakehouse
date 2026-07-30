@@ -1,7 +1,7 @@
 # Databricks notebook source
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
-from src.config import RAW_DATA_PATH, BRONZE_PATH
+from src.config import RAW_DATA_PATH, BRONZE_TABLE
 from src.schemas import solar_wind_schema
 
 spark = SparkSession.builder.getOrCreate()
