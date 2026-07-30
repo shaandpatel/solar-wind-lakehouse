@@ -8,26 +8,25 @@ import time
 pipeline_stages = [
     {
         "step": "Stage 1: Bronze Data Ingestion",
-        "notebook": "./01_ingest_bronze",
-        "timeout": 600  # 10 minutes max
+        "notebook": "01_ingest_bronze",
+        "timeout": 600
     },
     {
         "step": "Stage 2: Silver Cleaning & Data Quarantine",
-        "notebook": "./02_clean_silver_quarantine",
+        "notebook": "02_clean_silver_quarantine",
         "timeout": 600
     },
     {
         "step": "Stage 3: Gold Feature Engineering & MLflow Training",
-        "notebook": "./03_gold_mlflow_train",
-        "timeout": 1200 # 20 minutes max
+        "notebook": "03_gold_mlflow_train",
+        "timeout": 1200
     },
     {
         "step": "Stage 4: Gold Batch Inference & Delta Optimization",
-        "notebook": "./04_batch_inference_zorder",
-        "timeout": 900  # 15 minutes max
+        "notebook": "04_batch_inference_zorder",
+        "timeout": 900
     }
 ]
-
 # =========================================================================
 # Execution Loop
 # =========================================================================

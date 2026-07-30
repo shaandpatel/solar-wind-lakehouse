@@ -25,7 +25,7 @@ features_df = spark.sql("""
         -- Rolling Means
         COALESCE(AVG(solar_wind_speed) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag ROWS BETWEEN 5 PRECEDING AND CURRENT ROW), solar_wind_speed) AS rolling_5p_wind_speed,
         COALESCE(AVG(magnetic_field_total) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag ROWS BETWEEN 5 PRECEDING AND CURRENT ROW), magnetic_field_total) AS rolling_mag_mean,
-        COALESCE(AVG(proton_density) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag ROWS BETWEEN 5 PRECEDING AND CURRENT ROW), rolling_density_mean) AS rolling_density_mean,
+        COALESCE(AVG(proton_density) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag ROWS BETWEEN 5 PRECEDING AND CURRENT ROW), proton_density) AS rolling_density_mean,
         COALESCE(AVG(plasma_temperature) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag ROWS BETWEEN 5 PRECEDING AND CURRENT ROW), plasma_temperature) AS rolling_temp_mean,
         COALESCE(AVG(magnetic_field_bz) OVER (PARTITION BY DATE_TRUNC('month', time_tag) ORDER BY time_tag ROWS BETWEEN 5 PRECEDING AND CURRENT ROW), magnetic_field_bz) AS rolling_bz_mean,
 
