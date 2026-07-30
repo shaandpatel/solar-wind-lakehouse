@@ -1,4 +1,3 @@
-# Databricks notebook source
 CATALOG = "hive_metastore" 
 SCHEMA = "solar_wind_db"
 
