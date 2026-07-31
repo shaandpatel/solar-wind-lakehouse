@@ -1,8 +1,12 @@
 # Databricks notebook source
+import os 
 import mlflow.spark
 from pyspark.sql import SparkSession
 from pyspark.ml.feature import VectorAssembler
-from src.config import SILVER_TABLE, GOLD_TABLE, MLFLOW_EXPERIMENT_PATH
+from src.config import SILVER_TABLE, GOLD_TABLE, MLFLOW_EXPERIMENT_PATH, VOLUME_PATH
+
+# Set UC Volume path for MLflow temporary SparkML loading
+os.environ["MLFLOW_DFS_TMP"] = f"{VOLUME_PATH}/mlflow_tmp"
 
 spark = SparkSession.builder.getOrCreate()
 print(f"Starting Batch Inference on table {SILVER_TABLE}...")
