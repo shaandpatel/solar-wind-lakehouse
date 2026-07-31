@@ -3,7 +3,7 @@ import os
 import mlflow
 import mlflow.spark
 from pyspark.sql import SparkSession
-from pyspark.ml import Pipeline
+from pyspark.ml import PipelineModel
 from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.ml.clustering import KMeans
 from pyspark.ml.evaluation import ClusteringEvaluator
@@ -62,7 +62,8 @@ feature_cols = [
 ]
 
 assembler = VectorAssembler(inputCols=feature_cols, outputCol="raw_features")
-assembled_df = assembler.transform(gold_features_df)
+# Clear metadata from raw_features vector to prevent payload expansion
+assembled_df = assembler.transform(gold_features_df).withMetadata("raw_features", {})
 
 # 4. MLflow Experiment Tracking & Pipeline Training
 mlflow.set_experiment(MLFLOW_EXPERIMENT_PATH) 
@@ -75,11 +76,17 @@ with mlflow.start_run(run_name="kmeans_solar_anomaly") as run:
     mlflow.log_param("seed", seed)
     mlflow.log_param("feature_columns", feature_cols)
     
+    # Fit Scaler and clear vector metadata on output
     scaler = StandardScaler(inputCol="raw_features", outputCol="features", withStd=True, withMean=True)
-    kmeans = KMeans(k=k_clusters, seed=seed, featuresCol="features", predictionCol="anomaly_cluster")
+    scaler_model = scaler.fit(assembled_df)
+    scaled_df = scaler_model.transform(assembled_df).withMetadata("features", {})
     
-    pipeline = Pipeline(stages=[scaler, kmeans])
-    pipeline_model = pipeline.fit(assembled_df)
+    # Fit KMeans directly on cleaned DataFrame
+    kmeans = KMeans(k=k_clusters, seed=seed, featuresCol="features", predictionCol="anomaly_cluster")
+    kmeans_model = kmeans.fit(scaled_df)
+    
+    # Bundle into PipelineModel so downstream Notebook 04 retains exact same pipeline artifact path
+    pipeline_model = PipelineModel(stages=[scaler_model, kmeans_model])
     predictions_df = pipeline_model.transform(assembled_df)
     
     evaluator = ClusteringEvaluator(predictionCol="anomaly_cluster", featuresCol="features", metricName="silhouette")
