@@ -6,7 +6,10 @@ from pyspark.ml import Pipeline
 from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.ml.clustering import KMeans
 from pyspark.ml.evaluation import ClusteringEvaluator
-from src.config import SILVER_TABLE, GOLD_TRAINING_EVAL_TABLE, MLFLOW_EXPERIMENT_PATH
+from src.config import SILVER_TABLE, GOLD_TRAINING_EVAL_TABLE, MLFLOW_EXPERIMENT_PATH, VOLUME_PATH
+
+# Set UC Volume path for MLflow temporary SparkML staging
+os.environ["MLFLOW_DFS_TMP"] = f"{VOLUME_PATH}/mlflow_tmp"
 
 spark = SparkSession.builder.appName("Solar_Wind_Lakehouse").getOrCreate()
 print(f"Starting Gold Layer ML Workflow using input table: {SILVER_TABLE}...")

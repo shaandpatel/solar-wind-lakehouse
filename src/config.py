@@ -1,5 +1,6 @@
 # Raw Data Source
 RAW_DATA_PATH = "/Volumes/workspace/default/raw_data/historicsw.csv" 
+VOLUME_PATH = "/Volumes/workspace/default/raw_data"
 
 # UC Delta Tables (catalog.schema.table)
 BRONZE_TABLE = "workspace.default.sw_bronze"
