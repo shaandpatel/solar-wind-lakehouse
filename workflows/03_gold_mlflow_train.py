@@ -1,4 +1,5 @@
 # Databricks notebook source
+import os
 import mlflow
 import mlflow.spark
 from pyspark.sql import SparkSession
