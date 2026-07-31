@@ -6,6 +6,5 @@ solar_wind_schema = StructType([
     StructField("proton_density", DoubleType(), True),
     StructField("magnetic_field_total", DoubleType(), True),
     StructField("magnetic_field_bz", DoubleType(), True),
-    StructField("plasma_temperature", DoubleType(), True),
-    StructField("status_code", StringType(), True) 
+    StructField("plasma_temperature", DoubleType(), True)
 ])

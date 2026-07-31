@@ -8,7 +8,7 @@ spark = SparkSession.builder.getOrCreate()
 
 print(f"Starting Silver ETL & Data Quality checks on table {BRONZE_TABLE}...")
 
-# 1. Read directly from Unity Catalog Bronze Table
+# 1. Read directly from UC Bronze Table
 bronze_df = spark.read.table(BRONZE_TABLE)
 
 # 2. Define Validation Rules
@@ -20,8 +20,7 @@ features_valid = (
     F.col("magnetic_field_total").isNotNull() & 
     F.col("magnetic_field_bz").isNotNull() & 
     F.col("plasma_temperature").isNotNull() & 
-    (F.col("solar_wind_speed") >= 0) &
-    (F.col("status_code") == "OK")
+    (F.col("solar_wind_speed") >= 0)
 )
 
 valid_condition = pk_valid & features_valid
@@ -38,7 +37,6 @@ invalid_df = bronze_df.filter(~valid_condition) \
          .when(F.col("magnetic_field_bz").isNull(), "Null Z Magnetic Field Measurement")
          .when(F.col("plasma_temperature").isNull(), "Null Plasma Temperature Measurement")
          .when(F.col("solar_wind_speed") < 0, "Negative Solar Wind Speed Value")
-         .when(F.col("status_code") != "OK", "Non-OK Sensor Flag")
          .otherwise("Failed Validation Check")
     ) \
     .withColumn("_quarantined_at", F.current_timestamp())
