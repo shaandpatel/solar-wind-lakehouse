@@ -2,13 +2,13 @@
 import mlflow.spark
 from pyspark.sql import SparkSession
 from pyspark.ml.feature import VectorAssembler
-from src.config import SILVER_PATH, GOLD_PATH, MLFLOW_EXPERIMENT_PATH
+from src.config import SILVER_TABLE, GOLD_TABLE, MLFLOW_EXPERIMENT_PATH
 
 spark = SparkSession.builder.getOrCreate()
-print(f"Starting Batch Inference on path {SILVER_PATH}...")
+print(f"Starting Batch Inference on table {SILVER_TABLE}...")
 
-# 1. Read Silver Delta path into Temp View
-silver_df = spark.read.format("delta").load(SILVER_PATH)
+# 1. Read Silver Table into Temp View
+silver_df = spark.read.table(SILVER_TABLE)
 silver_df.createOrReplaceTempView("silver_data")
 
 features_df = spark.sql("""
@@ -81,20 +81,20 @@ final_gold_df = scored_df.select(
     "anomaly_cluster"
 )
 
-# 3. Save, Optimize, and Time Travel using Path Syntax
-final_gold_df.write.format("delta").mode("overwrite").save(GOLD_PATH)
-print(f"Batch inference saved to path: {GOLD_PATH}")
+# 3. Save, Optimize, and Time Travel using Table Identifiers
+final_gold_df.write.format("delta").mode("overwrite").saveAsTable(GOLD_TABLE)
+print(f"Batch inference saved to table: {GOLD_TABLE}")
 
 print("Optimizing Gold Table for fast querying...")
-spark.sql(f"OPTIMIZE delta.`{GOLD_PATH}` ZORDER BY (time_tag)")
+spark.sql(f"OPTIMIZE {GOLD_TABLE} ZORDER BY (time_tag)")
 
 print("Running Delta Time Travel Audit...")
-history_df = spark.sql(f"DESCRIBE HISTORY delta.`{GOLD_PATH}`")
+history_df = spark.sql(f"DESCRIBE HISTORY {GOLD_TABLE}")
 
 latest_version = history_df.select("version").head()[0]
 if latest_version > 0:
     previous_version = latest_version - 1
-    history_old = spark.read.option("versionAsOf", previous_version).format("delta").load(GOLD_PATH)
+    history_old = spark.read.option("versionAsOf", previous_version).table(GOLD_TABLE)
     print(f"Current Version ({latest_version}) Rows: {final_gold_df.count()}")
     print(f"Previous Version ({previous_version}) Rows: {history_old.count()}")
 else:

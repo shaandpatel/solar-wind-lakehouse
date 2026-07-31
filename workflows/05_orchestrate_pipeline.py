@@ -1,10 +1,7 @@
 # Databricks notebook source
 import time
 
-
 # Solar Wind Lakehouse Pipeline DAG Definition
-
-# Order is strictly enforced: Bronze -> Silver -> Gold (Train) -> Gold (Infer)
 pipeline_stages = [
     {
         "step": "Stage 1: Bronze Data Ingestion",
@@ -27,9 +24,8 @@ pipeline_stages = [
         "timeout": 900
     }
 ]
-# =========================================================================
+
 # Execution Loop
-# =========================================================================
 print("==================================================")
 print("Starting Solar Wind Lakehouse Pipeline")
 print("==================================================\n")
@@ -56,7 +52,6 @@ for stage in pipeline_stages:
         print(f"\nFAILURE: {step_name} failed after {step_duration}s!")
         print(f"Error Details: {e}\n")
         
-        # Halt execution to protect downstream Delta tables from corrupted or missing data
         raise RuntimeError(f"Pipeline Halted: Upstream task '{step_name}' failed.")
 
 total_pipeline_duration = round(time.time() - pipeline_start_time, 2)
@@ -65,4 +60,3 @@ print("\n==================================================")
 print(f"Solar Wind Lakehouse Pipeline executed end-to-end successfully!")
 print(f"\nTotal Execution Time: {total_pipeline_duration} seconds")
 print("==================================================")
-

@@ -6,13 +6,13 @@ from pyspark.ml import Pipeline
 from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.ml.clustering import KMeans
 from pyspark.ml.evaluation import ClusteringEvaluator
-from src.config import SILVER_PATH, GOLD_TRAINING_EVAL_PATH, MLFLOW_EXPERIMENT_PATH
+from src.config import SILVER_TABLE, GOLD_TRAINING_EVAL_TABLE, MLFLOW_EXPERIMENT_PATH
 
 spark = SparkSession.builder.appName("Solar_Wind_Lakehouse").getOrCreate()
-print(f"Starting Gold Layer ML Workflow using input path: {SILVER_PATH}...")
+print(f"Starting Gold Layer ML Workflow using input table: {SILVER_TABLE}...")
 
-# 1. Read Silver Delta path and create Temp View for Spark SQL
-silver_df = spark.read.format("delta").load(SILVER_PATH)
+# 1. Read Silver Delta Table directly
+silver_df = spark.read.table(SILVER_TABLE)
 silver_df.createOrReplaceTempView("silver_data")
 
 # 2. Feature Engineering via Spark SQL
@@ -86,7 +86,7 @@ with mlflow.start_run(run_name="kmeans_solar_anomaly") as run:
     
     print(f"Model Silhouette Score: {silhouette:.4f} logged to MLflow.")
 
-# 5. Save Training Evaluation Data to Delta Path
+# 5. Save Training Evaluation Data to UC Table
 final_eval_df = predictions_df.select(
     "time_tag", "solar_wind_speed", "proton_density", "magnetic_field_total", "magnetic_field_bz", "plasma_temperature",
     "rolling_5p_wind_speed", "rolling_mag_mean", "rolling_density_mean", "rolling_temp_mean", "rolling_bz_mean",
@@ -94,5 +94,5 @@ final_eval_df = predictions_df.select(
     "anomaly_cluster"
 )
 
-final_eval_df.write.format("delta").mode("overwrite").save(GOLD_TRAINING_EVAL_PATH)
-print(f"Successfully generated anomaly tags and saved to evaluation path: {GOLD_TRAINING_EVAL_PATH}")
+final_eval_df.write.format("delta").mode("overwrite").saveAsTable(GOLD_TRAINING_EVAL_TABLE)
+print(f"Successfully generated anomaly tags and saved to table: {GOLD_TRAINING_EVAL_TABLE}")

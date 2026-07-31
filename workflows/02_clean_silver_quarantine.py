@@ -2,16 +2,16 @@
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 from delta.tables import DeltaTable
-from src.config import BRONZE_PATH, SILVER_PATH, QUARANTINE_PATH
+from src.config import BRONZE_TABLE, SILVER_TABLE, QUARANTINE_TABLE
 
 spark = SparkSession.builder.getOrCreate()
 
-print(f"Starting Silver ETL & Data Quality checks on path {BRONZE_PATH}...")
+print(f"Starting Silver ETL & Data Quality checks on table {BRONZE_TABLE}...")
 
-# 1. Reads directly from UC table
+# 1. Read directly from Unity Catalog Bronze Table
 bronze_df = spark.read.table(BRONZE_TABLE)
 
-# 2. Define Comprehensive Validation Rules
+# 2. Define Validation Rules
 pk_valid = F.col("time_tag").isNotNull()
 
 features_valid = (
@@ -43,23 +43,23 @@ invalid_df = bronze_df.filter(~valid_condition) \
     ) \
     .withColumn("_quarantined_at", F.current_timestamp())
 
-# 3. Route Invalid Records to Quarantine Path
+# 3. Route Invalid Records to Quarantine Table
 quarantine_count = invalid_df.count()
 if quarantine_count > 0:
-    invalid_df.write.format("delta").mode("append").save(QUARANTINE_PATH)
-    print(f"Quarantined {quarantine_count} bad record(s) -> {QUARANTINE_PATH}")
+    invalid_df.write.format("delta").mode("append").saveAsTable(QUARANTINE_TABLE)
+    print(f"Quarantined {quarantine_count} bad record(s) -> {QUARANTINE_TABLE}")
 else:
     print("Zero data quality failures detected.")
 
-# 4. Upsert (MERGE) Valid Data into Silver Path
-if not DeltaTable.isDeltaTable(spark, SILVER_PATH):
-    valid_df.write.format("delta").mode("overwrite").save(SILVER_PATH)
+# 4. Upsert (MERGE) Valid Data into Silver Table
+if not spark.catalog.tableExists(SILVER_TABLE):
+    valid_df.write.format("delta").mode("overwrite").saveAsTable(SILVER_TABLE)
 else:
-    silver_table = DeltaTable.forPath(spark, SILVER_PATH)
+    silver_table = DeltaTable.forName(spark, SILVER_TABLE)
     silver_table.alias("target").merge(
         valid_df.alias("source"),
         "target.time_tag = source.time_tag"
     ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
 
 silver_count = valid_df.count()
-print(f"Successfully merged {silver_count} clean record(s) -> {SILVER_PATH}")
+print(f"Successfully merged {silver_count} clean record(s) -> {SILVER_TABLE}")
